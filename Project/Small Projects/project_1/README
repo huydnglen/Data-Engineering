@@ -1,1 +1,188 @@
+# 📊 Data Engineering – Import & Transform Billing Data (Flash / J&T)
+
+## 1. Tổng quan (Overview)
+
+Dự án này là một **data ingestion & transformation script** dùng trong pipeline đối soát cước vận chuyển.
+
+Chức năng chính:
+
+* Ingest dữ liệu billing từ **Excel**
+* Load vào **PostgreSQL (raw/source layer)**
+* Làm sạch & loại bỏ trùng lặp
+* Áp dụng **business rules / policy** để tính phí
+* Ghi dữ liệu sang **curated/master layer** phục vụ báo cáo & đối soát
+
+Pipeline phù hợp cho mô hình dữ liệu:
+
+```text
+Excel (Source) → Raw Table (msx_data)
+              → Deduplication
+              → Business Rules / Policy Join
+              → Curated Table (mst_data)
+```
+
+---
+
+## 2. Phạm vi & Use cases
+
+* Đối soát cước vận chuyển (Logistics / Fulfillment)
+* Chuẩn hoá dữ liệu billing từ nhiều hãng vận chuyển
+* Làm nguồn cho:
+
+  * BI / Reporting
+  * Finance reconciliation
+  * Audit nội bộ
+
+---
+
+## 3. Kiến trúc dữ liệu (Data Architecture)
+
+### 3.1 Logical Layers
+
+| Layer        | Schema     | Mục đích                                 |
+| ------------ | ---------- | ---------------------------------------- |
+| Source / Raw | `msx_data` | Lưu dữ liệu gốc từ Excel                 |
+| Policy       | public     | Lưu bảng chính sách chiết khấu           |
+| Curated      | `mst_data` | Dữ liệu đã chuẩn hoá, sẵn sàng phân tích |
+
+### 3.2 Bảng sử dụng
+
+**Raw tables**
+
+* `msx_flash_230321878_data`
+* `msx_jnt_230321878_data`
+
+**Policy tables**
+
+* `flash_policy`
+* `jnt_policy`
+
+**Curated tables**
+
+* `mst_flash_230321878_data`
+* `mst_jnt_230321878_data`
+
+Join key:
+
+```text
+msx."Sender Name" = policy.warehouse_name
+```
+
+---
+
+## 4. Luồng xử lý chi tiết (Processing Flow)
+
+1. User chọn **carrier type** (Flash / J&T)
+2. User chọn một hoặc nhiều file Excel
+3. Đọc sheet (loại trừ `BILLING STATEMENT`)
+4. Load dữ liệu vào raw table
+5. Deduplicate dữ liệu theo business key
+6. Áp dụng hệ số chiết khấu theo carrier
+7. Join với bảng policy
+8. Tính toán phí & insert sang curated table
+
+---
+
+## 5. Business Rules & Transformations
+
+### 5.1 Hệ số chiết khấu
+
+| Carrier | Shipping | Return |
+| ------- | -------- | ------ |
+| Flash   | 50%      | 80%    |
+| J&T     | 40%      | 0%     |
+
+### 5.2 Công thức chính (ví dụ)
+
+* **Shipping Fee (chuẩn hoá)**
+
+```text
+Original / (1 - Shipping Discount)
+→ Apply policy discount
+```
+
+* **Return Fee Adjustment**
+
+```text
+Return Fee * return_fee_discount
+```
+
+* **Total Fee**
+
+```text
+COD Fee + Insurance Fee + Adjusted Return Fee + Adjusted Shipping Fee
+```
+
+---
+
+## 6. Yêu cầu kỹ thuật (Technical Requirements)
+
+### Runtime
+
+* Python >= 3.8
+* PostgreSQL >= 12
+
+### Python Dependencies
+
+```bash
+pip install pandas psycopg2
+```
+
+---
+
+## 7. Vận hành (Execution)
+
+Chạy script:
+
+```bash
+python main.py
+```
+
+Hệ thống sẽ log tiến trình import & transform ra terminal.
+
+---
+
+## 8. Data Quality & Constraints
+
+* Không enforce primary key ở raw layer
+* Deduplication dựa trên tập business columns
+* Không kiểm soát schema drift từ file Excel
+* Không hỗ trợ incremental load
+
+---
+
+## 9. Hạn chế & Rủi ro
+
+* Hard-code database credentials
+* Không có transaction rollback từng file
+* Không audit log theo batch
+* Không phù hợp chạy song song
+
+---
+
+## 10. Định hướng mở rộng
+
+* Tách config sang `.env`
+* Thêm batch_id / ingestion_time
+* Áp dụng staging table
+* Chuyển sang Airflow / Prefect
+* Chuẩn hoá theo mô hình **Medallion (Bronze / Silver / Gold)**
+
+---
+
+## 11. Đối tượng sử dụng
+
+* Data Engineer
+* Data Analyst
+* Finance / Ops
+* Internal Audit
+
+---
+
+📌 README này được viết theo **Data Engineering documentation style**, tập trung vào:
+
+* Data flow
+* Business rules
+* Data quality
+* Khả năng mở rộng pipeline
 
