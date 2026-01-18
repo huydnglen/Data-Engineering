@@ -1,1 +1,330 @@
+# MS95 Inventory & Order Data Pipeline
+
+## Overview
+
+This repository contains a **data ingestion and automation pipeline** designed to extract **order and inventory-related data** from a POS system (Pages.fm API), transform it into a structured format, and publish the results to **Google Sheets** for operational reporting.
+
+The project demonstrates how API-based operational data can be:
+
+* Collected at scale with pagination and concurrency
+* Cleaned and normalized
+* Transformed into an analytics-ready structure
+* Automatically delivered to downstream business users
+
+The pipeline reflects common data workflows in **retail, e-commerce, and inventory operations**.
+
+---
+
+## High-level Architecture
+
+```
+POS API (Pages.fm)
+        ↓
+MS95_INVENTORY.py
+  - Extract: Fetch orders via REST API (paginated, concurrent)
+  - Transform: Normalize order & item-level data
+  - Enrich: Translate statuses, derive dates
+        ↓
+PySpark DataFrame
+        ↓
+Google Sheets
+  - Operational reporting
+  - Inventory & order tracking
+```
+
+The pipeline runs in **batch mode** and can be executed on-demand or scheduled periodically.
+
+---
+
+## Technology Stack
+
+* **Python 3** – Core orchestration and API integration
+* **Requests** – REST API communication
+* **concurrent.futures** – Parallel API fetching
+* **PySpark** – Distributed data processing and schema enforcement
+* **Google Sheets API (gspread)** – Data publishing
+* **OAuth2 Service Account** – Secure authentication
+
+---
+
+## Project Structure
+
+```
+.
+├── MS95_INVENTORY.py    # POS data ingestion & reporting pipeline
+├── credentials.json    # Google Service Account credentials (not committed)
+├── README.md
+```
+
+---
+
+## Processing Logic
+
+### 1. Data Extraction
+
+* Fetches total number of orders from the POS API
+* Retrieves order data using **pagination** (page size = 250)
+* Uses **ThreadPoolExecutor** to parallelize API calls
+* Ensures no duplicate orders are processed
+
+### 2. Data Transformation
+
+* Translates numeric order statuses into Vietnamese labels
+* Normalizes nested order and item structures
+* Expands each order into **item-level records**
+* Derives key timestamps from status history (e.g. pickup date, return date)
+
+### 3. Data Processing with PySpark
+
+* Defines a strict schema for downstream consistency
+* Converts processed records into a PySpark DataFrame
+* Enables scalable processing if data volume increases
+
+### 4. Data Delivery
+
+* Clears existing data in the target Google Sheet
+* Writes refreshed data in a single operation
+* Provides an always up-to-date operational view
+
+---
+
+## Output Data Schema
+
+| Column                           | Description               |
+| -------------------------------- | ------------------------- |
+| ID                               | Internal order ID         |
+| Mã đơn hàng đầy đủ               | Full system order ID      |
+| Mã vận đơn                       | Carrier tracking code     |
+| Ngày đẩy đơn sang DVVC           | Shipment handover date    |
+| Trạng thái                       | Order status (Vietnamese) |
+| Sản phẩm                         | Product name              |
+| Số lượng                         | Quantity                  |
+| Mã sản phẩm                      | Product code              |
+| Mã mẫu mã                        | SKU / variation code      |
+| Ngày cập nhật trạng thái đã hoàn | Return completion date    |
+| COD                              | Cash-on-delivery amount   |
+
+---
+
+## How to Run
+
+### 1. Prerequisites
+
+* Python 3.x
+* Java (for PySpark)
+* Google Service Account credentials
+
+### 2. Install Dependencies
+
+```bash
+pip install requests gspread oauth2client pyspark
+```
+
+### 3. Configure Credentials
+
+* Create a Google Service Account
+* Download `credentials.json`
+* Share the target Google Sheet with the service account email
+
+### 4. Execute Pipeline
+
+```bash
+python MS95_INVENTORY.py
+```
+
+---
+
+## Design Principles
+
+* API-first data ingestion
+* Idempotent batch processing
+* Explicit schema definition
+* Automation over manual reporting
+* Scalable design using Spark
+
+---
+
+## Future Enhancements
+
+* Externalize API keys and configuration
+* Add retry & rate-limit handling
+* Incremental loading instead of full refresh
+* Persist data to a database before publishing
+* Integrate with BI tools (Power BI, Looker)
+
+---
+
+## Notes
+
+This repository focuses on **operational data automation** rather than end-user applications. It serves as a reference implementation for building reliable POS-to-reporting data pipelines.
+
+---
+
+**Author:** Huy Vu
+
+---
+
+# MS95 Inventory & Order Data Pipeline (Phiên bản Tiếng Việt)
+
+## Tổng quan
+
+Repository này triển khai một **pipeline Data & BI Automation hoàn chỉnh**, phục vụ thu thập, xử lý và phân phối **dữ liệu đơn hàng và tồn kho** từ hệ thống POS (Pages.fm API).
+
+Dự án minh hoạ cách dữ liệu vận hành lấy từ API có thể được:
+
+* Thu thập ở quy mô lớn với phân trang và xử lý song song
+* Làm sạch và chuẩn hoá dữ liệu
+* Chuyển đổi sang cấu trúc sẵn sàng cho phân tích
+* Phân phối tự động cho người dùng nghiệp vụ thông qua Google Sheets
+
+Pipeline phản ánh các luồng dữ liệu phổ biến trong **bán lẻ, thương mại điện tử và quản lý tồn kho**.
+
+---
+
+## Kiến trúc tổng thể (High-level Architecture)
+
+```
+POS API (Pages.fm)
+        ↓
+MS95_INVENTORY.py
+  - Extract: Gọi REST API lấy dữ liệu đơn hàng (phân trang, xử lý song song)
+  - Transform: Chuẩn hoá dữ liệu đơn hàng và sản phẩm
+  - Enrich: Chuyển đổi trạng thái, suy diễn mốc thời gian
+        ↓
+PySpark DataFrame
+        ↓
+Google Sheets
+  - Báo cáo vận hành
+  - Theo dõi đơn hàng & tồn kho
+```
+
+Pipeline được thiết kế theo **batch processing**, có thể chạy thủ công hoặc lập lịch định kỳ.
+
+---
+
+## Công nghệ sử dụng
+
+* **Python 3** – Điều phối pipeline và tích hợp API
+* **Requests** – Giao tiếp REST API
+* **concurrent.futures** – Gọi API song song
+* **PySpark** – Xử lý dữ liệu phân tán và đảm bảo schema
+* **Google Sheets API (gspread)** – Xuất dữ liệu báo cáo
+* **OAuth2 Service Account** – Xác thực bảo mật
+
+---
+
+## Cấu trúc dự án
+
+```
+.
+├── MS95_INVENTORY.py    # Pipeline ingest dữ liệu POS và xuất báo cáo
+├── credentials.json    # Service Account Google (không commit)
+├── README.md
+```
+
+---
+
+## Logic xử lý chi tiết
+
+### 1. Thu thập dữ liệu (Data Extraction)
+
+* Gọi API POS để lấy tổng số đơn hàng
+* Truy vấn dữ liệu theo từng trang (page size = 250)
+* Sử dụng **ThreadPoolExecutor** để gọi API song song
+* Đảm bảo không xử lý trùng đơn hàng
+
+### 2. Biến đổi dữ liệu (Data Transformation)
+
+* Chuyển đổi mã trạng thái đơn hàng sang nhãn tiếng Việt
+* Chuẩn hoá cấu trúc dữ liệu đơn hàng và sản phẩm
+* Tách mỗi đơn hàng thành các bản ghi theo từng sản phẩm (item-level)
+* Suy diễn các mốc thời gian quan trọng từ lịch sử trạng thái (ví dụ: ngày đẩy đơn, ngày hoàn)
+
+### 3. Xử lý dữ liệu bằng PySpark
+
+* Định nghĩa schema rõ ràng để đảm bảo tính nhất quán
+* Chuyển danh sách dữ liệu đã xử lý thành PySpark DataFrame
+* Thiết kế sẵn sàng mở rộng khi khối lượng dữ liệu tăng
+
+### 4. Phân phối dữ liệu (Data Delivery)
+
+* Xoá dữ liệu cũ trong Google Sheet đích
+* Ghi dữ liệu mới trong một lần cập nhật
+* Đảm bảo báo cáo luôn phản ánh dữ liệu mới nhất
+
+---
+
+## Schema dữ liệu đầu ra
+
+| Cột                              | Mô tả                            |
+| -------------------------------- | -------------------------------- |
+| ID                               | ID nội bộ của đơn hàng           |
+| Mã đơn hàng đầy đủ               | Mã đơn hàng trong hệ thống       |
+| Mã vận đơn                       | Mã vận chuyển                    |
+| Ngày đẩy đơn sang DVVC           | Ngày bàn giao đơn                |
+| Trạng thái                       | Trạng thái đơn hàng (tiếng Việt) |
+| Sản phẩm                         | Tên sản phẩm                     |
+| Số lượng                         | Số lượng                         |
+| Mã sản phẩm                      | Mã sản phẩm                      |
+| Mã mẫu mã                        | SKU / mã biến thể                |
+| Ngày cập nhật trạng thái đã hoàn | Ngày hoàn tất hoàn hàng          |
+| COD                              | Giá trị thu hộ                   |
+
+---
+
+## Hướng dẫn chạy chương trình
+
+### 1. Yêu cầu môi trường
+
+* Python 3.x
+* Java (phục vụ PySpark)
+* Google Service Account
+
+### 2. Cài đặt thư viện
+
+```bash
+pip install requests gspread oauth2client pyspark
+```
+
+### 3. Cấu hình xác thực
+
+* Tạo Google Service Account
+* Tải file `credentials.json`
+* Chia sẻ Google Sheet mục tiêu cho email của Service Account
+
+### 4. Chạy pipeline
+
+```bash
+python MS95_INVENTORY.py
+```
+
+---
+
+## Nguyên tắc thiết kế
+
+* Thu thập dữ liệu theo hướng API-first
+* Xử lý theo lô, đảm bảo tính tái lập
+* Định nghĩa schema rõ ràng
+* Ưu tiên tự động hoá báo cáo thay vì thao tác thủ công
+* Thiết kế có khả năng mở rộng với Spark
+
+---
+
+## Định hướng phát triển
+
+* Tách cấu hình API và credential ra biến môi trường
+* Bổ sung cơ chế retry và kiểm soát rate limit
+* Chuyển sang incremental load thay vì full refresh
+* Lưu dữ liệu trung gian vào database
+* Kết nối công cụ BI (Power BI, Looker)
+
+---
+
+## Ghi chú
+
+Repository này tập trung vào **tự động hoá dữ liệu vận hành**, không nhằm mục đích xây dựng ứng dụng cho người dùng cuối. Đây là một ví dụ tham khảo cho pipeline dữ liệu POS phục vụ báo cáo và BI.
+
+---
+
+**Author:** Huy Vu
 
