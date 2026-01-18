@@ -1,188 +1,365 @@
-# 📊 Data Engineering – Import & Transform Billing Data (Flash / J&T)
+# MSX Data & BI Automation Pipeline
 
-## 1. Tổng quan (Overview)
+## Overview
 
-Dự án này là một **data ingestion & transformation script** dùng trong pipeline đối soát cước vận chuyển.
+This repository contains an end-to-end **Data & BI Automation pipeline** designed for processing **operational / ERP-style data** sourced from Excel-based reports.
 
-Chức năng chính:
+The project demonstrates how raw operational data can be:
 
-* Ingest dữ liệu billing từ **Excel**
-* Load vào **PostgreSQL (raw/source layer)**
-* Làm sạch & loại bỏ trùng lặp
-* Áp dụng **business rules / policy** để tính phí
-* Ghi dữ liệu sang **curated/master layer** phục vụ báo cáo & đối soát
+* Ingested and standardized
+* Transformed using business rules and pricing policies
+* Stored as curated datasets (single source of truth)
+* Used for automated reporting and distribution
 
-Pipeline phù hợp cho mô hình dữ liệu:
+The pipeline reflects real-world data workflows commonly found in **manufacturing, logistics, and finance operations**.
 
-```text
-Excel (Source) → Raw Table (msx_data)
-              → Deduplication
-              → Business Rules / Policy Join
-              → Curated Table (mst_data)
+---
+
+## High-level Architecture
+
+```
+Excel / Operational Reports
+        ↓
+ETL_DATA_MSX.py
+  - Extract: Read batch Excel files
+  - Transform: Clean, deduplicate, apply business rules
+  - Load: Write curated data to PostgreSQL
+        ↓
+PostgreSQL (Curated / Master Tables)
+        ↓
+send_email_MST.py
+  - Aggregate data by business entity
+  - Generate Statement of Account (SOA)
+  - Distribute reports automatically via email
+```
+
+The pipeline is executed in **batch mode** and can be scheduled to run daily.
+
+---
+
+## Technology Stack
+
+* **Python 3** – ETL and automation
+* **PostgreSQL** – Persistent storage and transformations
+* **pandas** – Data processing
+* **psycopg2** – Database connectivity
+* **Tkinter** – Lightweight UI for file and data-type selection
+* **openpyxl** – Excel generation
+* **SMTP / MIME** – Automated email delivery
+
+---
+
+## Project Structure
+
+```
+.
+├── ETL_DATA_MSX.py      # Data ingestion and transformation pipeline
+├── send_email_MST.py   # Automated reporting and email distribution
+├── README.md
 ```
 
 ---
 
-## 2. Phạm vi & Use cases
+## Module Description
 
-* Đối soát cước vận chuyển (Logistics / Fulfillment)
-* Chuẩn hoá dữ liệu billing từ nhiều hãng vận chuyển
-* Làm nguồn cho:
+### 1. ETL_DATA_MSX.py – Data Ingestion & Transformation
 
-  * BI / Reporting
-  * Finance reconciliation
-  * Audit nội bộ
+**Purpose**
 
----
+* Ingest shipment and billing data from multiple Excel files
+* Standardize and clean raw operational data
+* Apply pricing and discount policies dynamically
+* Persist curated results into master tables
 
-## 3. Kiến trúc dữ liệu (Data Architecture)
+**Processing Flow**
 
-### 3.1 Logical Layers
+1. User selects data type (Flash / JNT)
+2. One or more Excel files are selected
+3. Raw data is inserted into staging tables
+4. Duplicate records are removed at database level
+5. Data is joined with policy tables
+6. Business rules are applied to calculate fees and adjustments
+7. Curated data is inserted into master tables
 
-| Layer        | Schema     | Mục đích                                 |
-| ------------ | ---------- | ---------------------------------------- |
-| Source / Raw | `msx_data` | Lưu dữ liệu gốc từ Excel                 |
-| Policy       | public     | Lưu bảng chính sách chiết khấu           |
-| Curated      | `mst_data` | Dữ liệu đã chuẩn hoá, sẵn sàng phân tích |
+**Key Characteristics**
 
-### 3.2 Bảng sử dụng
-
-**Raw tables**
-
-* `msx_flash_230321878_data`
-* `msx_jnt_230321878_data`
-
-**Policy tables**
-
-* `flash_policy`
-* `jnt_policy`
-
-**Curated tables**
-
-* `mst_flash_230321878_data`
-* `mst_jnt_230321878_data`
-
-Join key:
-
-```text
-msx."Sender Name" = policy.warehouse_name
-```
+* Batch-oriented processing
+* SQL-based transformations
+* Clear separation between staging and curated layers
+* Deterministic and repeatable results
 
 ---
 
-## 4. Luồng xử lý chi tiết (Processing Flow)
+### 2. send_email_MST.py – Automated Reporting & Distribution
 
-1. User chọn **carrier type** (Flash / J&T)
-2. User chọn một hoặc nhiều file Excel
-3. Đọc sheet (loại trừ `BILLING STATEMENT`)
-4. Load dữ liệu vào raw table
-5. Deduplicate dữ liệu theo business key
-6. Áp dụng hệ số chiết khấu theo carrier
-7. Join với bảng policy
-8. Tính toán phí & insert sang curated table
+**Purpose**
 
----
+* Query curated datasets from PostgreSQL
+* Aggregate financial metrics by business entity
+* Generate Statement of Account (SOA) reports
+* Automatically distribute reports via email
 
-## 5. Business Rules & Transformations
+**Processing Flow**
 
-### 5.1 Hệ số chiết khấu
+1. User selects data type (Flash / JNT)
+2. Curated data is queried for the current processing date
+3. Records are grouped by sender / warehouse
+4. Summary metrics are calculated
+5. Excel reports and HTML email content are generated
+6. Emails are sent automatically with attachments
 
-| Carrier | Shipping | Return |
-| ------- | -------- | ------ |
-| Flash   | 50%      | 80%    |
-| J&T     | 40%      | 0%     |
+**Key Characteristics**
 
-### 5.2 Công thức chính (ví dụ)
-
-* **Shipping Fee (chuẩn hoá)**
-
-```text
-Original / (1 - Shipping Discount)
-→ Apply policy discount
-```
-
-* **Return Fee Adjustment**
-
-```text
-Return Fee * return_fee_discount
-```
-
-* **Total Fee**
-
-```text
-COD Fee + Insurance Fee + Adjusted Return Fee + Adjusted Shipping Fee
-```
+* Fully automated reporting workflow
+* Entity-level personalization
+* In-memory report generation (no temporary files)
 
 ---
 
-## 6. Yêu cầu kỹ thuật (Technical Requirements)
+## Data Model Overview
 
-### Runtime
+### Staging Tables (`msx_data`)
 
-* Python >= 3.8
-* PostgreSQL >= 12
+* Store raw operational data ingested from Excel files
 
-### Python Dependencies
+### Policy Tables
+
+* Store discount and pricing rules per warehouse or business unit
+
+### Master Tables (`mst_data`)
+
+* Store curated, business-ready data
+* Serve as the single source of truth for reporting and BI tools
+
+---
+
+## How to Run
+
+### 1. Install Dependencies
 
 ```bash
-pip install pandas psycopg2
+pip install pandas psycopg2 openpyxl
 ```
 
----
-
-## 7. Vận hành (Execution)
-
-Chạy script:
+### 2. Run ETL Pipeline
 
 ```bash
-python main.py
+python ETL_DATA_MSX.py
 ```
 
-Hệ thống sẽ log tiến trình import & transform ra terminal.
+* Select data type
+* Select input Excel files
+
+### 3. Run Automated Reporting
+
+```bash
+python send_email_MST.py
+```
+
+* Select data type
+* Reports are generated and emailed automatically
 
 ---
 
-## 8. Data Quality & Constraints
+## Design Principles
 
-* Không enforce primary key ở raw layer
-* Deduplication dựa trên tập business columns
-* Không kiểm soát schema drift từ file Excel
-* Không hỗ trợ incremental load
-
----
-
-## 9. Hạn chế & Rủi ro
-
-* Hard-code database credentials
-* Không có transaction rollback từng file
-* Không audit log theo batch
-* Không phù hợp chạy song song
+* Separation of raw and curated data layers
+* Business logic implemented close to the data
+* Automation-first approach to reporting
+* Reproducible and auditable transformations
 
 ---
 
-## 10. Định hướng mở rộng
+## Future Enhancements
 
-* Tách config sang `.env`
-* Thêm batch_id / ingestion_time
-* Áp dụng staging table
-* Chuyển sang Airflow / Prefect
-* Chuẩn hoá theo mô hình **Medallion (Bronze / Silver / Gold)**
-
----
-
-## 11. Đối tượng sử dụng
-
-* Data Engineer
-* Data Analyst
-* Finance / Ops
-* Internal Audit
+* Externalize configuration using environment variables
+* Add logging and error handling
+* Schedule execution using cron or workflow orchestrators
+* Integrate with BI tools (Power BI, Tableau, etc.)
+* Implement data quality checks and validations
 
 ---
 
-📌 README này được viết theo **Data Engineering documentation style**, tập trung vào:
+## Notes
 
-* Data flow
-* Business rules
-* Data quality
-* Khả năng mở rộng pipeline
+This repository focuses on **data processing and automation patterns** rather than UI or application-level concerns. It is intended as a reference implementation for operational data pipelines in ERP-like environments.
 
+---
+
+**Author:** Huy Vu
+
+---
+
+# MSX Data & BI Automation Pipeline (Phiên bản Tiếng Việt)
+
+## Tổng quan
+
+Repository này triển khai một **pipeline Data & BI Automation hoàn chỉnh**, phục vụ xử lý **dữ liệu vận hành theo mô hình ERP** được trích xuất từ các báo cáo Excel.
+
+Mục tiêu của dự án là minh hoạ cách dữ liệu vận hành thô có thể được:
+
+* Thu thập và chuẩn hoá
+* Xử lý theo các quy tắc nghiệp vụ (business rules, pricing policy)
+* Lưu trữ thành tập dữ liệu đã tinh chỉnh (curated dataset)
+* Sử dụng cho báo cáo tự động và phân phối dữ liệu
+
+Pipeline phản ánh các luồng xử lý dữ liệu phổ biến trong **môi trường sản xuất, logistics và tài chính**.
+
+---
+
+## Kiến trúc tổng thể (High-level Architecture)
+
+```
+Excel / Báo cáo vận hành
+        ↓
+ETL_DATA_MSX.py
+  - Extract: Đọc dữ liệu theo lô từ nhiều file Excel
+  - Transform: Làm sạch, loại trùng, áp dụng quy tắc nghiệp vụ
+  - Load: Ghi dữ liệu đã chuẩn hoá vào PostgreSQL
+        ↓
+PostgreSQL (Bảng Master / Curated)
+        ↓
+send_email_MST.py
+  - Tổng hợp dữ liệu theo đơn vị nghiệp vụ
+  - Sinh báo cáo Statement of Account (SOA)
+  - Gửi báo cáo tự động qua email
+```
+
+Pipeline được thiết kế theo **batch processing**, phù hợp chạy theo ngày hoặc theo chu kỳ định sẵn.
+
+---
+
+## Công nghệ sử dụng
+
+* **Python 3** – ETL và tự động hoá
+* **PostgreSQL** – Lưu trữ và xử lý dữ liệu
+* **pandas** – Xử lý và biến đổi dữ liệu
+* **psycopg2** – Kết nối cơ sở dữ liệu
+* **Tkinter** – Giao diện chọn loại dữ liệu và file đầu vào
+* **openpyxl** – Sinh file Excel
+* **SMTP / MIME** – Gửi email tự động
+
+---
+
+## Cấu trúc dự án
+
+```
+.
+├── ETL_DATA_MSX.py      # Pipeline ingest & transform dữ liệu
+├── send_email_MST.py   # Tự động hoá báo cáo và gửi email
+├── README.md
+```
+
+---
+
+## Mô tả chi tiết các module
+
+### 1. ETL_DATA_MSX.py – Ingest & Transform dữ liệu
+
+**Mục đích**
+
+* Thu thập dữ liệu vận đơn / billing từ nhiều file Excel
+* Chuẩn hoá dữ liệu vận hành thô
+* Áp dụng chính sách chiết khấu và quy tắc tính phí
+* Ghi dữ liệu đã xử lý vào bảng master
+
+**Luồng xử lý**
+
+1. Người dùng chọn loại dữ liệu (Flash / JNT)
+2. Chọn một hoặc nhiều file Excel đầu vào
+3. Insert dữ liệu thô vào bảng staging
+4. Loại bỏ bản ghi trùng lặp tại tầng database
+5. Join với bảng policy
+6. Tính toán các khoản phí, điều chỉnh và tổng tiền
+7. Ghi dữ liệu hoàn chỉnh vào bảng master
+
+**Đặc điểm kỹ thuật**
+
+* Xử lý theo lô (batch)
+* Transform chủ yếu bằng SQL
+* Tách rõ staging và curated layer
+* Kết quả có thể tái lập và kiểm toán
+
+---
+
+### 2. send_email_MST.py – Báo cáo & phân phối tự động
+
+**Mục đích**
+
+* Truy vấn dữ liệu đã chuẩn hoá từ PostgreSQL
+* Tổng hợp số liệu theo từng đơn vị nghiệp vụ
+* Sinh báo cáo Statement of Account (SOA)
+* Gửi email báo cáo tự động cho các bên liên quan
+
+**Luồng xử lý**
+
+1. Người dùng chọn loại dữ liệu (Flash / JNT)
+2. Truy vấn dữ liệu theo ngày xử lý
+3. Gom nhóm dữ liệu theo Sender / Warehouse
+4. Tính toán các chỉ số tổng hợp
+5. Sinh file Excel và nội dung email HTML
+6. Gửi email tự động kèm file báo cáo
+
+**Đặc điểm kỹ thuật**
+
+* Tự động hoá hoàn toàn quy trình báo cáo
+* Cá nhân hoá báo cáo theo từng đơn vị
+* Không sinh file tạm trên ổ đĩa
+
+---
+
+## Tổng quan mô hình dữ liệu
+
+### Bảng Staging (`msx_data`)
+
+* Lưu dữ liệu vận hành thô từ Excel
+
+### Bảng Policy
+
+* Lưu quy tắc chiết khấu và pricing theo đơn vị
+
+### Bảng Master (`mst_data`)
+
+* Lưu dữ liệu đã chuẩn hoá, sẵn sàng cho BI
+* Đóng vai trò *single source of truth*
+
+---
+
+## Hướng dẫn chạy dự án
+
+### 1. Cài đặt thư viện
+
+```bash
+pip install pandas psycopg2 openpyxl
+```
+
+### 2. Chạy pipeline ETL
+
+```bash
+python ETL_DATA_MSX.py
+```
+
+### 3. Chạy báo cáo và gửi email
+
+```bash
+python send_email_MST.py
+```
+
+---
+
+## Nguyên tắc thiết kế
+
+* Phân tách rõ dữ liệu thô và dữ liệu đã chuẩn hoá
+* Đưa logic nghiệp vụ về gần tầng dữ liệu
+* Ưu tiên tự động hoá báo cáo
+* Dễ kiểm toán và mở rộng
+
+---
+
+## Định hướng mở rộng
+
+* Tách cấu hình ra biến môi trường
+* Bổ sung logging và xử lý lỗi
+* Lập lịch chạy tự động (cron / workflow orchestrator)
+* Kết nối trực tiếp với công cụ BI
+* Bổ sung kiểm soát chất lượng dữ liệu
